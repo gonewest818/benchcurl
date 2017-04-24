@@ -3,55 +3,28 @@
             [compojure.route :as route]
             [ring.adapter.jetty :as jetty]
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
-            [ring.middleware.multipart-params :refer [wrap-multipart-params]]
-            [ring.middleware.multipart-params.byte-array :refer [byte-array-store]]
             [ring.middleware.logger :refer [wrap-with-logger]]
-            [ring.util.io :refer [piped-input-stream]]
+;            [ring.middleware.multipart-params :refer [wrap-multipart-params]]
+;            [ring.middleware.multipart-params.byte-array :refer [byte-array-store]]
             [ring.util.response :refer [content-type header response status]]
+            [clojure.java.io :as io]
             [clojure.tools.logging :as log]
             [clojure.data.json :as json]
             [clojure.java.shell :refer [sh]])
+  (:import [org.apache.commons.io.input BoundedInputStream])
   (:gen-class))
 
-
-;;;
-;;; Stream generation
-;;; 
-
-(defn rand-input-stream
-  "Return a buffered input stream that produces exactly n bytes
-  read from /dev/random, i.e. a fixed-length random stream"
-  [n]
-  (let [buffer-size 4096]
-   (piped-input-stream
-    (fn [ostream]
-      (with-open [devrandom (clojure.java.io/input-stream "/dev/random")] 
-        (if (> n 0)
-          (let [rba (byte-array buffer-size)]
-            (loop [remainder n]
-              (.read devrandom rba)
-              (if (<= remainder buffer-size)
-                ;; flush after last chunk
-                (do (.write ostream rba 0 remainder)
-                    (.flush ostream))
-                ;; else keep looping
-                (do
-                  (.write ostream rba)
-                  (recur (- remainder buffer-size))))))))))))
 
 ;;;
 ;;; Load generation
 ;;; 
 
 (defn remote-benchmark
-  "Benchmark uses Apache Bench in a subprocess to generate remote load,
-  i.e. literally
-  
+  "Benchmark uses Apache Bench in a subprocess to generate remote load
       # ab -c <threads> -n <count> <url>/file?size=<size>
-
   and returns the dictionary that clojure.java.shell/sh produces"
-  [url count size threads]
-  (let [remote-url (format "%s/file?size=%d" url size)]
+  [server port count size threads]
+  (let [remote-url (format "http://%s:%s/file?size=%d" server port size)]
     (sh "ab"
         "-c" (str threads)
         "-n" (str count)
@@ -63,43 +36,45 @@
 
 (defroutes bc-routes
   "Benchcurl's supported routes are:
-
        GET /file?size=<#bytes>
-
        PUT /file?name=<string>
-
-       GET /benchcurl?url=example.com&count=100&size=100&threads=4
-
+       GET /benchcurl?server=example.com&port=8000&count=100&size=100&threads=4
    ...anything else yields a 404"
 
   (GET "/file" [size]
-    (log/info "generating random octets with size=" size)
-    (-> (response (rand-input-stream size))
-        (content-type "application/octet-stream")
-        (header "x-benchcurl-meta" (str "size=" size))))
+    (let [size (Integer/parseInt size)
+          stream (-> (io/input-stream "/dev/random")
+                     (BoundedInputStream. size))]
+      (log/info "generating random octets with size=" size)
+      (log/debug "input-stream=" stream)
+      (-> (response stream)
+          (content-type "application/octet-stream")
+          (header "x-benchcurl-meta" (str "size=" size)))))
 
   (PUT "/file" [name :as req]
     (response (str "PUT requested with name: " name)))
 
-  (GET "/benchcurl" [url count size threads :as req]
-    (log/info (str "Benchmarking remote site " url
+  (GET "/benchcurl" [server port count size threads]
+    (log/info (str "Benchmarking remote site " server ":" port
                    " with count: " count
                    " size: " size
                    " and threads: " threads))
-    (let [results (remote-benchmark url count size threads)]
+    (let [count (Integer/parseInt count)
+          size (Integer/parseInt size)
+          threads (Integer/parseInt threads)
+          results (remote-benchmark server port count size threads)]
       (-> (response (json/write-str results))
           (content-type "application/json")
           (header "x-benchcurl-meta"
-                  (format "url=%s:count=%d:size=%d:threads=%d"
-                          url count size threads)))))
+                  (format "url=%s:%s:count=%d:size=%d:threads=%d"
+                           server port count size threads)))))
   (route/not-found "Not found"))
 
-(defn app
-  "Wrap the Compojure routes with middleware"
-  []
+(def app
+  ^{:doc "Add ring middleware for some standard functionality"}
   (-> bc-routes
       (wrap-defaults api-defaults)
-      (wrap-multipart-params {:store (byte-array-store)})
+      ;; (wrap-multipart-params {:store (byte-array-store)})
       (wrap-with-logger)))
 
 
@@ -121,7 +96,7 @@
                        :min-threads 4
                        :join? blocking}]
      (log/info "jetty config = " jetty-config)
-     (reset! http (jetty/run-jetty (app) jetty-config)))))
+     (reset! http (jetty/run-jetty app jetty-config)))))
 
 (defn stop-jetty!
   "Stop the running jetty server"
