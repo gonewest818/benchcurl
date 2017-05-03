@@ -9,8 +9,8 @@ ENV JAVA_OPTS "-Xmx512m -Xms512m"
 RUN mkdir /benchcurl
 WORKDIR /benchcurl
 
-ADD target/uberjar/benchcurl-0.1.0-SNAPSHOT-standalone.jar /benchcurl/
+ADD target/uberjar/benchcurl-0.2.0-SNAPSHOT-standalone.jar /benchcurl/
 
 ENTRYPOINT ["/usr/bin/java"]
-CMD ["-jar", "benchcurl-0.1.0-SNAPSHOT-standalone.jar"]
+CMD ["-jar", "benchcurl-0.2.0-SNAPSHOT-standalone.jar"]
 
