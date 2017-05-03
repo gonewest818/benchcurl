@@ -4,5 +4,5 @@
 lein do clean, uberjar
 
 # build docker image and tag
-docker build -t gonewest818/benchcurl:0.1.0 .
+docker build -t gonewest818/benchcurl:0.2.0 .
 
