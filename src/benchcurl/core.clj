@@ -4,14 +4,13 @@
             [ring.adapter.jetty :as jetty]
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
             [ring.middleware.logger :refer [wrap-with-logger]]
-;            [ring.middleware.multipart-params :refer [wrap-multipart-params]]
-;            [ring.middleware.multipart-params.byte-array :refer [byte-array-store]]
             [ring.util.response :refer [content-type header response status]]
             [clojure.java.io :as io]
             [clojure.tools.logging :as log]
             [clojure.data.json :as json]
             [clojure.java.shell :refer [sh]])
-  (:import [org.apache.commons.io.input BoundedInputStream])
+  (:import [org.apache.commons.io IOUtils]
+           [org.apache.commons.io.input BoundedInputStream])
   (:gen-class))
 
 
@@ -37,13 +36,13 @@
 (defroutes bc-routes
   "Benchcurl's supported routes are:
        GET /file?size=<#bytes>
-       PUT /file?name=<string>
+       PUT /file
        GET /benchcurl?server=example.com&port=8000&count=100&size=100&threads=4
    ...anything else yields a 404"
 
   (GET "/file" [size]
-    (let [size (Integer/parseInt size)
-          stream (-> (io/input-stream "/dev/random")
+    (let [size (or (and size (Integer/parseInt size)) 1024)
+          stream (-> (io/input-stream "/dev/urandom")
                      (BoundedInputStream. size))]
       (log/info "generating random octets with size=" size)
       (log/debug "input-stream=" stream)
@@ -51,30 +50,35 @@
           (content-type "application/octet-stream")
           (header "x-benchcurl-meta" (str "size=" size)))))
 
-  (PUT "/file" [name :as req]
-    (response (str "PUT requested with name: " name)))
+  (POST "/file" {body :body}
+    (let [size (count (IOUtils/toByteArray body))]
+      (log/info (str "received file with size: " size))
+      (-> (response (str "\"created\" file with size:" size))
+          (status 201))))
 
   (GET "/benchcurl" [server port count size threads]
     (log/info (str "Benchmarking remote site " server ":" port
                    " with count: " count
                    " size: " size
                    " and threads: " threads))
-    (let [count (Integer/parseInt count)
-          size (Integer/parseInt size)
-          threads (Integer/parseInt threads)
+    (let [server  (or server "localhost")
+          port    (or port "8000")
+          count   (or (and count (Integer/parseInt count)) 1)
+          size    (or (and size (Integer/parseInt size)) 1024)
+          threads (or (and threads (Integer/parseInt threads)) 1)
           results (remote-benchmark server port count size threads)]
       (-> (response (json/write-str results))
           (content-type "application/json")
           (header "x-benchcurl-meta"
                   (format "url=%s:%s:count=%d:size=%d:threads=%d"
-                           server port count size threads)))))
+                          server port count size threads)))))
+
   (route/not-found "Not found"))
 
 (def app
   ^{:doc "Add ring middleware for some standard functionality"}
   (-> bc-routes
       (wrap-defaults api-defaults)
-      ;; (wrap-multipart-params {:store (byte-array-store)})
       (wrap-with-logger)))
 
 

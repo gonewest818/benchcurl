@@ -1,4 +1,4 @@
-(defproject benchcurl "0.1.0-SNAPSHOT"
+(defproject benchcurl "0.2.0-SNAPSHOT"
   :description "Simple RESTful test endpoint and load generator"
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"
