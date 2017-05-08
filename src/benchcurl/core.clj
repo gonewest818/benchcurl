@@ -8,10 +8,26 @@
             [clojure.java.io :as io]
             [clojure.tools.logging :as log]
             [clojure.data.json :as json]
-            [clojure.java.shell :refer [sh]])
+            [clojure.java.shell :refer [sh]]
+            [defcon.core])
   (:import [org.apache.commons.io IOUtils]
            [org.apache.commons.io.input BoundedInputStream])
   (:gen-class))
+
+
+;;;
+;;; Configuration options
+;;; 
+
+(def config
+  (defcon.core/init
+    [
+     {:name :benchcurl-port         :type :integer :default 8000}
+     {:name :benchcurl-max-threads  :type :integer :default 8}
+     {:name :benchcurl-ssl-port     :type :integer :default 443}
+     {:name :benchcurl-keystore     :type :string  :default "benchcurl.jks"} ; path?
+     {:name :benchcurl-key-password :type :string  :default nil}
+     ]))
 
 
 ;;;
@@ -19,19 +35,21 @@
 ;;; 
 
 (defn ab-extract-value
-  [r v sep]
-  (let [key (keyword (-> v
-                         (clojure.string/replace " " "-")
-                         (clojure.string/lower-case)))
-        pattern (re-pattern (str "(?m)^\\s*" v sep "\\s+(\\S+)"))
-        value (second (re-find pattern r))]
-    {key value}))
+  ([r v]
+   (ab-extract-value r v ""))
+  ([r v sep]
+   (let [key (keyword (-> v
+                          (clojure.string/replace " " "-")
+                          (clojure.string/lower-case)))
+         pattern (re-pattern (str "(?m)^\\s*" v sep "\\s+(\\S+)"))
+         value (second (re-find pattern r))]
+     {key value})))
 
 (defn ab-extract-percentiles
   [r]
   (if (re-find #"Percentage of the requests" r)
     (into {}
-          (map #(ab-extract-value r % "")
+          (map #(ab-extract-value r %)
                ["50%" "66%" "75%" "80%" "90%" "95%" "98%" "99%" "100%"]))))
 
 (defn ab-parse-results
@@ -137,11 +155,15 @@
   ([]
    (start-jetty! false))
   ([blocking]
-   (let [jetty-config {:port 8000
-                       :max-threads 8
-                       :min-threads 4
-                       :join? blocking}]
-     (log/info "jetty config = " jetty-config)
+   (let [jetty-config {:port         (:benchcurl-port config)
+                       :ssl?         true
+                       :ssl-port     (:benchcurl-ssl-port config)
+                       :keystore     (:benchcurl-keystore config)
+                       :key-password (:benchcurl-key-password config)
+                       :max-threads  (:benchcurl-max-threads config)
+                       :min-threads  4
+                       :join?        blocking}]
+     (log/info "jetty config = " (assoc jetty-config :key-password "<elided>"))
      (reset! http (jetty/run-jetty app jetty-config)))))
 
 (defn stop-jetty!

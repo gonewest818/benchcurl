@@ -5,6 +5,7 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
 
   :dependencies [[org.clojure/clojure "1.8.0"]                 
+                 [org.clojars.gonewest818/defcon "0.5.0-SNAPSHOT"]
                  [org.clojure/data.json "0.2.6"]
                  [compojure "1.6.0"]
                  [ring "1.6.0"]

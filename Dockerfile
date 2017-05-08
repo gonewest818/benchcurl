@@ -8,6 +8,7 @@ RUN mkdir /benchcurl
 WORKDIR /benchcurl
 
 ADD target/uberjar/benchcurl-0.3.0-SNAPSHOT-standalone.jar /benchcurl/
+ADD benchcurl.jks /benchcurl/
 
 ENTRYPOINT ["/usr/bin/java"]
 CMD ["-jar", "benchcurl-0.3.0-SNAPSHOT-standalone.jar"]
