@@ -7,6 +7,7 @@
             [ring.util.response :refer [content-type header response status]]
             [clojure.java.io :as io]
             [clojure.tools.logging :as log]
+            [clojure.tools.nrepl.server :refer [start-server stop-server]]
             [clojure.data.json :as json]
             [clojure.java.shell :refer [sh]]
             [defcon.core])
@@ -27,6 +28,7 @@
      {:name :benchcurl-ssl-port     :type :integer :default 443}
      {:name :benchcurl-keystore     :type :string  :default "benchcurl.jks"} ; path?
      {:name :benchcurl-key-password :type :string  :default nil}
+     {:name :benchcurl-nrepl-port   :type :integer :default -1}
      ]))
 
 
@@ -172,9 +174,29 @@
   (.stop @http)
   (reset! http nil))
 
+;;;
+;;; nrepl Configuration and Launch
+;;;
+(def nrepl
+  ^{:doc "Handle to the nrepl server so it can be stopped later."}
+  (atom nil))
+
+(defn start-nrepl!
+  "start the nrepl server"
+  []
+  (reset! nrepl (start-server :bind "0.0.0.0"
+                              :port (:benchcurl-nrepl-port config))))
+
+(defn stop-nrepl!
+  "stop the nrepl server"
+  []
+  (stop-server @nrepl))
+
+
 (defn -main
-  "Launch the benchcurl services and blocks"
+  "Launches the benchcurl services and blocks"
   [& args]
+  (if (> (:benchcurl-nrepl-port config) 0) (start-nrepl!))
   (start-jetty! true))
 
 

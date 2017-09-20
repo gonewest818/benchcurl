@@ -13,13 +13,13 @@ As a single jar
 
     $ git clone ...
     $ lein uberjar
-    $ java -jar target/uberjar/benchcurl-0.2.0-standalone.jar
+    $ java -jar target/uberjar/benchcurl-0.3.0-standalone.jar
 
 
 As a docker image
 
     $ ./docker_build.sh
-    $ docker run -it --rm gonewest818/benchcurl:0.2.0
+    $ docker run -it --rm -p 443:443 gonewest818/benchcurl:0.3.0
     
 
 ## Options
@@ -39,7 +39,7 @@ The configurables are:
 | BENCHCURL_SSL_PORT     | integer | 443             | for encrypted web traffic |
 | BENCHCURL_KEYSTORE     | string  | "benchcurl.jks" | local path to the keystore |
 | BENCHCURL_KEY_PASSWORD | string  | null            | no default provided, must configure |
-
+| BENCHCURL_NREPL_PORT   | integer | -1              | open an nrepl server port (unless < 0) |
 
 ## TLS encryption
 
@@ -86,20 +86,20 @@ and the content type header will always be application/octet-stream. In typical
 usage you discard the body (because it doesn't matter) but read the timing in
 the output from curl.
 
-    $ curl -v https://example.com/file?size=1000000 -o /dev/null
+    $ curl -k -v https://example.com/file?size=1000000 -o /dev/null
 
 
 Send a file. The body you send can be anything you like, and you should set
 the header to be "application/octet-stream."  On the server side the body is
 discarded so again it doesn't really matter what bytes you send.
 
-    $ curl -X POST --data-binary @source-file \
+    $ curl -k -X POST --data-binary @source-file \
            -H "Content-Type: application/octet-stream" \
            https://example.com/file
 
 Benchmark another site.  In this case the *remote* server invokes ApacheBench
 and points it at the server and port you specify.
 
-    $ curl https://example.com/benchcurl?size=1024&count=10&threads=5&server=remotesite.com&port=8000
+    $ curl -k https://example.com/benchcurl?size=1024&count=10&threads=5&server=remotesite.com&port=8000
 
 
